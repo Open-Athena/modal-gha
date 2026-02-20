@@ -1,0 +1,58 @@
+name: Launch Modal Runner
+on:
+  workflow_call:
+    secrets:
+      GH_SA_TOKEN:
+        required: true
+      MODAL_TOKEN_ID:
+        required: true
+      MODAL_TOKEN_SECRET:
+        required: true
+    inputs:
+      gpu:
+        type: string
+        default: "A10G"
+      timeout:
+        type: string
+        default: "60"
+      image:
+        type: string
+        default: "nvidia/cuda:12.4.0-devel-ubuntu22.04"
+      runner_version:
+        type: string
+        default: "2.322.0"
+      debug:
+        type: string
+        default: "false"
+    outputs:
+      label:
+        value: ${{ jobs.launch.outputs.label }}
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.launch.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Open-Athena/modal-gha
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install modal requests
+      - name: Launch Modal runner
+        id: launch
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          modal run src/modal_gha/launch.py \
+            --repo "${{ github.repository }}" \
+            --token "${{ secrets.GH_SA_TOKEN }}" \
+            --gpu "${{ inputs.gpu }}" \
+            --timeout "${{ inputs.timeout }}" \
+            --base-image "${{ inputs.image }}" \
+            --runner-version "${{ inputs.runner_version }}" \
+            --debug "${{ inputs.debug }}"

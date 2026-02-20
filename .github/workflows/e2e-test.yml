@@ -1,0 +1,33 @@
+name: E2E Test
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  modal:
+    uses: ./.github/workflows/runner.yml
+    secrets:
+      GH_SA_TOKEN: ${{ secrets.GH_SA_TOKEN }}
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    with:
+      gpu: "T4"
+      timeout: "30"
+      debug: "true"
+
+  test:
+    needs: modal
+    runs-on: ${{ needs.modal.outputs.label }}
+    steps:
+      - name: GPU smoke test
+        run: |
+          echo "Running on Modal runner: $(hostname)"
+          nvidia-smi
+          echo "CUDA devices: $(nvidia-smi -L)"
+      - name: Basic runner info
+        run: |
+          echo "OS: $(uname -a)"
+          echo "Python: $(python3 --version)"
+          echo "Working dir: $(pwd)"
+          echo "Runner label: ${{ needs.modal.outputs.label }}"
