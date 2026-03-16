@@ -11,7 +11,7 @@ import requests
 app = modal.App("github-actions-runner")
 
 RUNNER_HOME = "/runner"
-DEFAULT_RUNNER_VERSION = "2.322.0"
+DEFAULT_RUNNER_VERSION = "2.332.0"
 DEFAULT_BASE_IMAGE = "nvidia/cuda:12.4.0-devel-ubuntu22.04"
 
 
@@ -78,10 +78,14 @@ def wait_for_runner(
     repo: str,
     token: str,
     label: str,
+    sandbox: modal.Sandbox,
     timeout: int = 120,
     interval: int = 5,
 ) -> bool:
-    """Poll GitHub API until a runner with the given label appears online."""
+    """Poll GitHub API until a runner with the given label appears online.
+
+    Also monitors the sandbox — if it exits early, raises immediately.
+    """
     url = f"https://api.github.com/repos/{repo}/actions/runners"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -90,10 +94,21 @@ def wait_for_runner(
     }
     deadline = time.time() + timeout
     while time.time() < deadline:
+        # Check if sandbox died
+        poll = sandbox.poll()
+        if poll is not None:
+            print("Sandbox exited early! Collecting logs...")
+            for chunk in sandbox.stdout:
+                print(chunk, end="")
+            for chunk in sandbox.stderr:
+                print(chunk, end="")
+            raise RuntimeError(f"Sandbox exited with code {poll} before runner came online")
+
         resp = requests.get(url, headers=headers)
         resp.raise_for_status()
         for runner in resp.json().get("runners", []):
-            if label in [lbl["name"] for lbl in runner.get("labels", [])]:
+            runner_labels = [lbl["name"] for lbl in runner.get("labels", [])]
+            if label in runner_labels and runner.get("status") == "online":
                 print(f"Runner '{label}' is online (id={runner['id']})")
                 return True
         time.sleep(interval)
@@ -108,7 +123,6 @@ def main(
     timeout: int = 60,
     base_image: str = DEFAULT_BASE_IMAGE,
     runner_version: str = DEFAULT_RUNNER_VERSION,
-    debug: bool = False,
 ):
     """Launch an ephemeral GitHub Actions runner on Modal.
 
@@ -119,7 +133,6 @@ def main(
         timeout: Sandbox timeout in minutes
         base_image: Base Docker image
         runner_version: GitHub Actions runner version
-        debug: Stream sandbox stdout/stderr
     """
     label = generate_label()
     print(f"Generated runner label: {label}")
@@ -131,6 +144,7 @@ def main(
     image = build_runner_image(base_image, runner_version)
 
     print(f"Creating sandbox (gpu={gpu}, timeout={timeout}m)...")
+    sb_app = modal.App.lookup("modal-gha-runner", create_if_missing=True)
     sandbox = modal.Sandbox.create(
         "bash",
         "-c",
@@ -142,21 +156,14 @@ def main(
         secrets=[
             modal.Secret.from_dict({"JIT_CONFIG": jit_config}),
         ],
-        app=app,
+        app=sb_app,
     )
     print(f"Sandbox created: {sandbox.object_id}")
 
     write_github_output("id", label)
-    print(f"::set-output name=id::{label}")
-
-    if debug:
-        print("--- Streaming sandbox stdout ---")
-        for chunk in sandbox.stdout:
-            print(chunk, end="")
 
     print(f"Waiting for runner '{label}' to come online...")
-    if wait_for_runner(repo, token, label):
+    if wait_for_runner(repo, token, label, sandbox):
         print(f"Runner '{label}' is ready. Downstream jobs can use: runs-on: {label}")
     else:
-        print(f"WARNING: Runner '{label}' did not appear within polling timeout.")
-        print("The sandbox may still be starting up. Check GitHub Actions runners page.")
+        raise RuntimeError(f"Runner '{label}' did not come online within polling timeout")

@@ -20,10 +20,7 @@ on:
         default: "nvidia/cuda:12.4.0-devel-ubuntu22.04"
       runner_version:
         type: string
-        default: "2.322.0"
-      debug:
-        type: string
-        default: "false"
+        default: "2.332.0"
     outputs:
       id:
         value: ${{ jobs.launch.outputs.id }}
@@ -48,15 +45,10 @@ jobs:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          DEBUG_FLAG=""
-          if [ "${{ inputs.debug }}" = "true" ]; then
-            DEBUG_FLAG="--debug"
-          fi
           modal run src/modal_gha/launch.py \
             --repo "${{ github.repository }}" \
             --token "${{ secrets.GH_SA_TOKEN }}" \
             --gpu "${{ inputs.gpu }}" \
             --timeout "${{ inputs.timeout }}" \
             --base-image "${{ inputs.image }}" \
-            --runner-version "${{ inputs.runner_version }}" \
-            $DEBUG_FLAG
+            --runner-version "${{ inputs.runner_version }}"
