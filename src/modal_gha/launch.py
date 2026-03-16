@@ -14,6 +14,8 @@ RUNNER_HOME = "/runner"
 DEFAULT_RUNNER_VERSION = "2.332.0"
 DEFAULT_BASE_IMAGE = "nvidia/cuda:12.4.0-devel-ubuntu22.04"
 
+AVAILABLE_GPUS = ["T4", "L4", "A10G", "L40S", "A100", "H100"]
+
 
 def build_runner_image(
     base_image: str = DEFAULT_BASE_IMAGE,
@@ -74,6 +76,25 @@ def write_github_output(name: str, value: str) -> None:
             f.write(f"{name}={value}\n")
 
 
+def gha_tags() -> dict[str, str]:
+    """Build sandbox tags from GitHub Actions environment variables."""
+    tag_vars = {
+        "repo": "GITHUB_REPOSITORY",
+        "sha": "GITHUB_SHA",
+        "ref": "GITHUB_REF",
+        "run_id": "GITHUB_RUN_ID",
+        "run_number": "GITHUB_RUN_NUMBER",
+        "workflow": "GITHUB_WORKFLOW",
+        "actor": "GITHUB_ACTOR",
+    }
+    tags = {}
+    for key, env_var in tag_vars.items():
+        val = os.environ.get(env_var)
+        if val:
+            tags[key] = val
+    return tags
+
+
 def wait_for_runner(
     repo: str,
     token: str,
@@ -94,7 +115,6 @@ def wait_for_runner(
     }
     deadline = time.time() + timeout
     while time.time() < deadline:
-        # Check if sandbox died
         poll = sandbox.poll()
         if poll is not None:
             print("Sandbox exited early! Collecting logs...")
@@ -129,7 +149,7 @@ def main(
     Args:
         repo: GitHub repo (owner/name)
         token: GitHub PAT with admin:org + repo scope
-        gpu: Modal GPU type (e.g. T4, A10G, A100)
+        gpu: Modal GPU type (T4, L4, A10G, L40S, A100, H100)
         timeout: Sandbox timeout in minutes
         base_image: Base Docker image
         runner_version: GitHub Actions runner version
@@ -159,6 +179,10 @@ def main(
         app=sb_app,
     )
     print(f"Sandbox created: {sandbox.object_id}")
+
+    tags = {"label": label, "gpu": gpu, **gha_tags()}
+    sandbox.set_tags(tags)
+    print(f"Tags: {tags}")
 
     write_github_output("id", label)
 
