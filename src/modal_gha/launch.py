@@ -146,8 +146,8 @@ def main(
     )
     print(f"Sandbox created: {sandbox.object_id}")
 
-    write_github_output("label", label)
-    print(f"::set-output name=label::{label}")
+    write_github_output("id", label)
+    print(f"::set-output name=id::{label}")
 
     if debug:
         print("--- Streaming sandbox stdout ---")

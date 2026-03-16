@@ -25,14 +25,14 @@ on:
         type: string
         default: "false"
     outputs:
-      label:
-        value: ${{ jobs.launch.outputs.label }}
+      id:
+        value: ${{ jobs.launch.outputs.id }}
 
 jobs:
   launch:
     runs-on: ubuntu-latest
     outputs:
-      label: ${{ steps.launch.outputs.label }}
+      id: ${{ steps.launch.outputs.id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,6 +48,10 @@ jobs:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
+          DEBUG_FLAG=""
+          if [ "${{ inputs.debug }}" = "true" ]; then
+            DEBUG_FLAG="--debug"
+          fi
           modal run src/modal_gha/launch.py \
             --repo "${{ github.repository }}" \
             --token "${{ secrets.GH_SA_TOKEN }}" \
@@ -55,4 +59,4 @@ jobs:
             --timeout "${{ inputs.timeout }}" \
             --base-image "${{ inputs.image }}" \
             --runner-version "${{ inputs.runner_version }}" \
-            --debug "${{ inputs.debug }}"
+            $DEBUG_FLAG

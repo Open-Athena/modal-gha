@@ -18,7 +18,7 @@ jobs:
 
   test:
     needs: modal
-    runs-on: ${{ needs.modal.outputs.label }}
+    runs-on: ${{ needs.modal.outputs.id }}
     steps:
       - name: GPU smoke test
         run: |
@@ -30,4 +30,4 @@ jobs:
           echo "OS: $(uname -a)"
           echo "Python: $(python3 --version)"
           echo "Working dir: $(pwd)"
-          echo "Runner label: ${{ needs.modal.outputs.label }}"
+          echo "Runner label: ${{ needs.modal.outputs.id }}"
